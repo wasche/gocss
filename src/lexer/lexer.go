@@ -64,11 +64,12 @@ func (lex *Lexer) comment(c int) {
 func (lex *Lexer) str(c int) {
 	f, _, _ := lex.token.ReadRune()
 	lex.token.UnreadRune()
-	if lex.token.Len() == 0 || lex.prev == '\\' {
+	switch {
+	case lex.token.Len() == 0 || lex.prev == '\\':
 		lex.token.WriteRune(c)
-	} else if c == f {
+	case c == f:
 		lex.token.WriteRune(c)
-	} else {
+	default:
 		lex.token.WriteRune(c)
 		lex.next(String)
 		lex.token.Reset()
@@ -77,9 +78,10 @@ func (lex *Lexer) str(c int) {
 }
 
 func (lex *Lexer) identifier(c int) {
-	if isNameChar(c) || isDigit(c) {
+	switch {
+	case isNameChar(c) || isDigit(c):
 		lex.token.WriteRune(c)
-	} else {
+	default:
 		lex.next(Identifier)
 		lex.token.Reset()
 		lex.handler = nil
@@ -90,22 +92,23 @@ func (lex *Lexer) identifier(c int) {
 func (lex *Lexer) number(c int) {
 	nondigit := !isDigit(c)
 	point := '.' == lex.prev
+	switch {
 	// .2em or .classname ?
-	if point && nondigit {
+	case point && nondigit:
 		lex.next(Period)
 		lex.token.Reset()
 		lex.handler = nil
 		lex.Tokenize(c)
 	// -2px or -moz-something
-	} else if '-' == lex.prev && nondigit {
+	case '-' == lex.prev && nondigit:
 		lex.handler = (*Lexer).identifier
 		lex.handler(lex, c)
-	} else if !nondigit || (!point && ('.' == c || '-' == c)) {
+	case !nondigit || (!point && ('.' == c || '-' == c)):
 		lex.token.WriteRune(c)
-	} else if lex.lastToken == "#" {
+	case lex.lastToken == "#":
 		lex.handler = (*Lexer).identifier
 		lex.handler(lex, c)
-	} else {
+	default:
 		lex.next(Number)
 		lex.token.Reset()
 		lex.handler = nil
@@ -114,14 +117,15 @@ func (lex *Lexer) number(c int) {
 }
 
 func (lex *Lexer) operator(c int) {
-	if '=' == c {
+	switch {
+	case '=' == c:
 		lex.token.WriteRune(c)
 		lex.next(Match)
 		lex.token.Reset()
 		lex.handler = nil
-	} else if lex.token.Len() == 0 {
+	case lex.token.Len() == 0:
 		lex.token.WriteRune(c)
-	} else {
+	default:
 		lex.next(TokenMap[lex.prev])
 		lex.token.Reset()
 		lex.handler = nil
@@ -161,9 +165,12 @@ func (lex *Lexer) Tokenize(c int) {
 }
 
 func (lex *Lexer) End() {
-	if lex.handler != nil {
+	switch {
+	// finish the current token
+	case lex.handler != nil:
 		lex.handler(lex, -1)
-	} else if lex.token.Len() > 0 {
+	// still something in buffer, assuming whitespace
+	case lex.token.Len() > 0:
 		value := lex.token.String()
 		lex.parser.Token(Whitespace, value)
 	}
