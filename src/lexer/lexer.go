@@ -122,7 +122,7 @@ func (lex *Lexer) operator(c int) {
 	} else if lex.token.Len() == 0 {
 		lex.token.WriteRune(c)
 	} else {
-		lex.next(TokenMap[c])
+		lex.next(TokenMap[lex.prev])
 		lex.token.Reset()
 		lex.handler = nil
 		lex.Tokenize(c)
