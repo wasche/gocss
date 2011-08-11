@@ -3,8 +3,8 @@ package parser
 
 import (
 	"./lexer"
+	"./sbuf"
 	"os"
-	"bytes"
 	"strings"
 )
 
@@ -57,9 +57,9 @@ type Parser struct {
 	lastToken   lexer.Token
 	lastValue   string
 	property    string
-	ruleBuffer  bytes.Buffer
-	valueBuffer bytes.Buffer
-	rgbBuffer   bytes.Buffer
+	ruleBuffer  sbuf.StringBuffer
+	valueBuffer sbuf.StringBuffer
+	rgbBuffer   sbuf.StringBuffer
 	pending     string
 	inRule      bool
 	space       bool
@@ -75,23 +75,23 @@ func (p *Parser) output(str string) {
 }
 
 func (p *Parser) dump(str string) {
-	p.ruleBuffer.WriteString(p.pending)
-	p.ruleBuffer.WriteString(str)
-	p.output(p.ruleBuffer.String())
+	p.ruleBuffer.Push(p.pending)
+	p.ruleBuffer.Push(str)
+	p.output(p.ruleBuffer.Join(""))
 	p.ruleBuffer.Reset()
 	p.pending = ""
 }
 
 func (p *Parser) write(str string) {
 	if len(str) == 0 { return }
-	if len(str) >= 3 && str[0:3] == "/*!" && p.ruleBuffer.Len() == 0 {
+	if len(str) >= 3 && str[0:3] == "/*!" && p.ruleBuffer.Empty() {
 		p.output(str)
 		return
 	}
-	p.ruleBuffer.WriteString(str)
+	p.ruleBuffer.Push(str)
 	if str == "}" {
 		// check for empty rule
-		s := p.ruleBuffer.String()
+		s := p.ruleBuffer.Join("")
 		if s[len(s)-2:] != "{}" {
 			p.output(s)
 		}
@@ -111,12 +111,12 @@ func (p *Parser) q(str string) {
 	case p.property == "":
 		p.buffer(str)
 	default:
-		p.valueBuffer.WriteString(str)
+		p.valueBuffer.Push(str)
 	}
 }
 
 func (p *Parser) collapseZeroes() {
-	t := p.valueBuffer.String()
+	t := p.valueBuffer.Join("")
 	p.valueBuffer.Reset()
 	_, isNone := NONE_PROPERTIES[p.property]
 	switch {
@@ -216,7 +216,31 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		p.q(value)
 		p.q(" ")
 	case token == lexer.Semicolon:
-		// TODO
+		switch {
+		case p.at:
+			p.at = false
+			switch {
+			default:
+				p.dump(value)
+			case p.ruleBuffer.At(1) == "charset":
+				switch {
+				case p.charset:
+					p.ruleBuffer.Reset()
+					p.pending = ""
+				default:
+					p.charset = true
+					p.dump(value)
+				}
+			}
+		case p.lastToken == lexer.Semicolon:
+			// skip
+			return
+		default:
+			p.collapseZeroes()
+			p.valueBuffer.Reset()
+			p.property = ""
+			p.q(value)
+		}
 	case token == lexer.LeftBrace:
 		// TODO
 	case token == lexer.RightBrace:
@@ -239,7 +263,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		}
 	case token == lexer.Match:
 		p.q(value)
-		if strings.ToLower(p.valueBuffer.String()) == MS_ALPHA {
+		if strings.ToLower(p.valueBuffer.Join("")) == MS_ALPHA {
 			p.buffer("alpha(opacity=")
 			p.valueBuffer.Reset()
 		}
@@ -285,8 +309,8 @@ func (p *Parser) Token(token lexer.Token, value string) {
 
 func (p *Parser) End() {
 	p.write(p.pending)
-	if p.ruleBuffer.Len() > 0 {
-		p.output(p.ruleBuffer.String())
+	if !p.ruleBuffer.Empty() {
+		p.output(p.ruleBuffer.Join(""))
 	}
 }
 
