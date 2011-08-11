@@ -3,9 +3,9 @@ package parser
 
 import (
 	"./lexer"
-	//"fmt"
 	"os"
 	"bytes"
+	"strings"
 )
 
 const MS_ALPHA = "progid:dximagetransform.microsoft.alpha(opacity="
@@ -20,24 +20,24 @@ var (
 		"mm": true,
 		"pc": true,
 		"ex": true,
-		"%": true,
+		"%":  true,
 	}
 	KEYWORDS        = map[string] bool {
-		"normal": true,
-		"bold": true,
-		"italic": true,
-		"serif": true,
+		"normal":     true,
+		"bold":       true,
+		"italic":     true,
+		"serif":      true,
 		"sans-serif": true,
-		"fixed": true,
+		"fixed":      true,
 	}
 	BOUNDARY_OPS    = map[lexer.Token] bool {
-		lexer.LeftBrace: true,
+		lexer.LeftBrace:  true,
 		lexer.RightBrace: true,
-		lexer.Child: true,
-		lexer.Semicolon: true,
-		lexer.Colon: true,
-		lexer.Comma: true,
-		lexer.Comment: true,
+		lexer.Child:      true,
+		lexer.Semicolon:  true,
+		lexer.Colon:      true,
+		lexer.Comma:      true,
+		lexer.Comment:    true,
 	}
 	NONE_PROPERTIES = make(map[string]bool, 15)
 )
@@ -133,7 +133,7 @@ func (p *Parser) collapseZeroes() {
 }
 
 func (p *Parser) Token(token lexer.Token, value string) {
-	//fmt.Fprintf(os.Stderr, "token: %s, value: %s\n", token, value)
+	//os.Stderr.WriteString("token: "+token+", value: "+value+"\n")
 
 	if p.rgb {
 		switch token {
@@ -208,7 +208,10 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		p.q(value)
 		p.at = true
 	case p.inRule && token == lexer.Colon && len(p.property) == 0:
-		// TODO
+		p.q(value)
+		if len(p.lastValue) == 0 { p.property = strings.ToLower(p.lastValue) }
+		p.valueBuffer.Reset()
+	// first-letter and first-line must be followed by a space
 	case !p.inRule && p.lastToken == lexer.Colon && (value == "first-letter" || value == "first-line"):
 		p.q(value)
 		p.q(" ")
@@ -223,11 +226,56 @@ func (p *Parser) Token(token lexer.Token, value string) {
 	case token == lexer.Number && len(value) > 2 && value[:2] == "0.":
 		p.q(value[2:])
 	case token == lexer.String && p.property == "-ms-filter":
-		// TODO
+		if strings.ToLower(value[1:len(MS_ALPHA)+1]) == MS_ALPHA {
+			c := value[0:1]
+			a := value[len(MS_ALPHA)+1:len(value)-2]
+			p.q(c)
+			p.q("alpha(opacity=")
+			p.q(a)
+			p.q(")")
+			p.q(c)
+		} else {
+			p.q(value)
+		}
 	case token == lexer.Match:
-		// TODO
+		p.q(value)
+		if strings.ToLower(p.valueBuffer.String()) == MS_ALPHA {
+			p.buffer("alpha(opacity=")
+			p.valueBuffer.Reset()
+		}
 	default:
-		// TODO
+		t := strings.ToLower(value)
+		switch {
+		// values of 0 don't need a unit
+		case p.lastToken == lexer.Number && p.lastValue == "0" &&
+				(token == lexer.Percent || token == lexer.Identifier):
+			if UNITS[value] {
+				p.q(" ")
+				p.q(value)
+			}
+		// use 0 instead of none
+		case value == "none" && p.lastToken == lexer.Colon && NONE_PROPERTIES[p.property]:
+			p.q("0")
+		// force properties to lower case for better gzip compression
+		case token == lexer.Identifier && p.lastToken == lexer.Colon:
+			switch {
+			// #aabbcc
+			case p.lastToken == lexer.Hash:
+				if len(value) == 6 &&
+						t[0] == t[1] &&
+						t[2] == t[3] &&
+						t[4] == t[5] {
+					p.q(t[1:3])
+					p.q(t[4:5])
+				} else {
+					p.q(t)
+				}
+			case len(p.property) == 0 || KEYWORDS[t]:
+				p.q(t)
+			default:
+				p.q(value)
+			}
+		}
 	}
 
 	p.lastToken = token
