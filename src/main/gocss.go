@@ -30,14 +30,21 @@ func process(f *os.File) {
 	}
 }
 
-func processFiles(name string, result chan(int)) {
-	f, err := os.Open(name)
-	if f == nil {
-		fmt.Fprintf(os.Stderr, "can't open %s: error %s\n", name, err)
-		os.Exit(1)
+func processFiles(queue chan(string), result chan(int)) {
+	for done := false; !done; {
+		select {
+		case name := <-queue:
+			f, err := os.Open(name)
+			if f == nil {
+				fmt.Fprintf(os.Stderr, "can't open %s: error %s\n", name, err)
+				os.Exit(1)
+			}
+			process(f)
+			f.Close()
+		default:
+			done = true
+		}
 	}
-	process(f)
-	f.Close()
 	result <- 0
 }
 
@@ -53,13 +60,18 @@ func main() {
 	threads := 4
 	runtime.GOMAXPROCS(threads)
 
+	queue := make(chan string, 64)
 	result := make(chan int, threads)
 	for i := 0; i < n; i++ {
-		go processFiles(flag.Arg(i), result)
+		queue <- flag.Arg(i)
+	}
+
+	for i := 0; i < threads; i++ {
+		go processFiles(queue, result)
 	}
 
 	// wait for all jobs to complete
-	for i := 0; i < n; i++ {
+	for i := 0; i < threads; i++ {
 		<-result
 	}
 }
