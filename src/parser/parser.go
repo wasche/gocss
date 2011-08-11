@@ -10,6 +10,9 @@ import (
 
 const MS_ALPHA = "progid:dximagetransform.microsoft.alpha(opacity="
 
+var ZERO_STR string
+var ZERO_TOKEN lexer.Token
+
 var (
 	UNITS           = map[string] bool {
 		"px": true,
@@ -41,6 +44,16 @@ var (
 	}
 	NONE_PROPERTIES = make(map[string]bool, 15)
 )
+
+func in(m map[string] bool, key string) bool {
+	_, contains := m[key]
+	return contains
+}
+
+func isBoundaryOp(key lexer.Token) bool {
+	_, contains := BOUNDARY_OPS[key]
+	return contains
+}
 
 func init() {
 	NONE_PROPERTIES["outline"] = true
@@ -79,7 +92,7 @@ func (p *Parser) dump(str string) {
 	p.ruleBuffer.Push(str)
 	p.output(p.ruleBuffer.Join(""))
 	p.ruleBuffer.Reset()
-	p.pending = ""
+	p.pending = ZERO_STR
 }
 
 func (p *Parser) write(str string) {
@@ -89,9 +102,10 @@ func (p *Parser) write(str string) {
 		return
 	}
 	p.ruleBuffer.Push(str)
-	if str == "}" {
+	if str == "}" && p.ruleBuffer.Len() >= 2 {
 		// check for empty rule
 		s := p.ruleBuffer.Join("")
+		os.Stderr.WriteString(s+"\n")
 		if s[len(s)-2:] != "{}" {
 			p.output(s)
 		}
@@ -100,7 +114,7 @@ func (p *Parser) write(str string) {
 }
 
 func (p *Parser) buffer(str string) {
-	if len(p.pending) > 0 {
+	if p.pending == ZERO_STR {
 		p.write(p.pending)
 	}
 	p.pending = str
@@ -108,7 +122,7 @@ func (p *Parser) buffer(str string) {
 
 func (p *Parser) q(str string) {
 	switch {
-	case p.property == "":
+	case p.property == ZERO_STR:
 		p.buffer(str)
 	default:
 		p.valueBuffer.Push(str)
@@ -118,14 +132,13 @@ func (p *Parser) q(str string) {
 func (p *Parser) collapseZeroes() {
 	t := p.valueBuffer.Join("")
 	p.valueBuffer.Reset()
-	_, isNone := NONE_PROPERTIES[p.property]
 	switch {
 	case t == "0 0" || t == "0 0 0" || t == "0 0 0 0":
 		p.buffer("0")
 		if p.property == "background-positon" || p.property == "-webkit-transform-origin" || p.property == "-moz-transform-origin" {
 			p.buffer(" 0")
 		}
-	case t == "none" && (p.property == "background" || isNone):
+	case t == "none" && (p.property == "background" || in(NONE_PROPERTIES, p.property)):
 		p.buffer("0")
 	default:
 		p.buffer(t)
@@ -226,7 +239,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 				switch {
 				case p.charset:
 					p.ruleBuffer.Reset()
-					p.pending = ""
+					p.pending = ZERO_STR
 				default:
 					p.charset = true
 					p.dump(value)
@@ -238,15 +251,45 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		default:
 			p.collapseZeroes()
 			p.valueBuffer.Reset()
-			p.property = ""
+			p.property = ZERO_STR
 			p.q(value)
 		}
 	case token == lexer.LeftBrace:
-		// TODO
+		if p.checkSpace != -1 { p.checkSpace = -1 } // start of a rule, space was correct
+		switch {
+		case p.at:
+			p.at = false
+			p.dump(value)
+		default:
+			p.inRule = true
+			p.q(value)
+		}
 	case token == lexer.RightBrace:
-		// TODO
+		if p.checkSpace != -1 {
+			// didn't start a rule, space was wrong
+			p.ruleBuffer.Delete(p.checkSpace)
+			p.checkSpace = -1
+		}
+		if !p.valueBuffer.Empty() { p.collapseZeroes() }
+		if p.pending == ";" {
+			p.pending = "}"
+		} else {
+			p.buffer(value)
+		}
+		p.property = ZERO_STR
+		p.inRule = false
 	case !p.inRule:
-		// TODO
+		if !p.space || token == lexer.Child || (!p.space && token == lexer.Colon) || p.lastToken == ZERO_TOKEN ||
+				isBoundaryOp(p.lastToken) {
+			p.q(value)
+		} else {
+			if token == lexer.Semicolon {
+				p.checkSpace = p.ruleBuffer.Len() + 1 // include pending variable
+			}
+			p.q(" ")
+			p.q(value)
+			p.space = false
+		}
 	case token == lexer.Number && len(value) > 2 && value[:2] == "0.":
 		p.q(value[2:])
 	case token == lexer.String && p.property == "-ms-filter":
@@ -278,7 +321,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 				p.q(value)
 			}
 		// use 0 instead of none
-		case value == "none" && p.lastToken == lexer.Colon && NONE_PROPERTIES[p.property]:
+		case value == "none" && p.lastToken == lexer.Colon && in(NONE_PROPERTIES, p.property):
 			p.q("0")
 		// force properties to lower case for better gzip compression
 		case token == lexer.Identifier && p.lastToken == lexer.Colon:
@@ -294,7 +337,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 				} else {
 					p.q(t)
 				}
-			case len(p.property) == 0 || KEYWORDS[t]:
+			case len(p.property) == 0 || in(KEYWORDS, t):
 				p.q(t)
 			default:
 				p.q(value)
