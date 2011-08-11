@@ -102,11 +102,10 @@ func (p *Parser) write(str string) {
 		return
 	}
 	p.ruleBuffer.Push(str)
-	if str == "}" && p.ruleBuffer.Len() >= 2 {
+	if str == "}" {
 		// check for empty rule
 		s := p.ruleBuffer.Join("")
-		os.Stderr.WriteString(s+"\n")
-		if s[len(s)-2:] != "{}" {
+		if len(s) >= 2 && s[len(s)-2:] != "{}" {
 			p.output(s)
 		}
 		p.ruleBuffer.Reset()
@@ -114,7 +113,7 @@ func (p *Parser) write(str string) {
 }
 
 func (p *Parser) buffer(str string) {
-	if p.pending == ZERO_STR {
+	if p.pending != ZERO_STR {
 		p.write(p.pending)
 	}
 	p.pending = str
@@ -196,15 +195,22 @@ func (p *Parser) Token(token lexer.Token, value string) {
 	// most whitespace isn't needed, but make sure we have space between values
 	// for multivalue properties
 	// margin: 5px 5px;
-	switch {
-	case p.lastToken == lexer.Number && (token == lexer.Hash || token == lexer.Number):
-		p.q(" ")
-		p.space = false
-	case (token == lexer.Number || token == lexer.Identifier || token == lexer.Hash) &&
-			(p.lastToken == lexer.Identifier || p.lastToken == lexer.Percent || p.lastToken == lexer.RightParen):
-		p.q(" ")
-		p.space = false
-	case p.inRule && token == lexer.Identifier && p.lastToken == lexer.RightParen:
+	isNum  := token == lexer.Number
+	isHash := token == lexer.Hash
+	isId   := token == lexer.Identifier
+	wasNum := p.lastToken == lexer.Number
+	wasId  := p.lastToken == lexer.Identifier
+	wasPct := p.lastToken == lexer.Percent
+	wasRP  := p.lastToken == lexer.RightParen
+
+	aa := isHash || isNum
+	a := aa && wasNum
+
+	ba := isNum || isId || isHash
+	bb := wasId || wasPct || wasRP
+	b := ba && bb
+
+	if a || b {
 		p.q(" ")
 		p.space = false
 	}
@@ -316,7 +322,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		// values of 0 don't need a unit
 		case p.lastToken == lexer.Number && p.lastValue == "0" &&
 				(token == lexer.Percent || token == lexer.Identifier):
-			if UNITS[value] {
+			if !in(UNITS, value) {
 				p.q(" ")
 				p.q(value)
 			}
@@ -340,6 +346,12 @@ func (p *Parser) Token(token lexer.Token, value string) {
 			case len(p.property) == 0 || in(KEYWORDS, t):
 				p.q(t)
 			default:
+				p.q(value)
+			}
+		default:
+			if in(KEYWORDS, t) {
+				p.q(t)
+			} else {
 				p.q(value)
 			}
 		}
