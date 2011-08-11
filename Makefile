@@ -18,3 +18,5 @@ parser.$O:
 sbuf.$O:
 	$(GC) -o sbuf.$O src/sbuf/stringbuffer.go
 
+test:
+	./run-tests.sh

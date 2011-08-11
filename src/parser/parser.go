@@ -170,11 +170,11 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		// comments are only needed in a few places:
 		switch {
 		// 1) special comments /*! ... */
-		case value[2:3] == "!":
+		case len(value) >= 3 && value[2:3] == "!":
 			p.q(value)
 			p.lastToken = token
 			p.lastValue = value
-		case value[len(value)-3:len(value)-2] == "\\":
+		case len(value) >= 3 && value[len(value)-3:len(value)-2] == "\\":
 			p.q("/*\\*/")
 			p.lastToken = token
 			p.lastValue = value
