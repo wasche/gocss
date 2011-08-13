@@ -100,7 +100,7 @@ func (lex *Lexer) number(c int) {
 		lex.handler = nil
 		lex.Tokenize(c)
 	// -2px or -moz-something
-	case '-' == lex.prev && nondigit:
+	case '-' == lex.prev && nondigit && c != '.':
 		lex.handler = (*Lexer).identifier
 		lex.handler(lex, c)
 	case !nondigit || (!point && ('.' == c || '-' == c)):
