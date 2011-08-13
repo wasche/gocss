@@ -67,7 +67,7 @@ func (lex *Lexer) str(c int) {
 	switch {
 	case lex.token.Len() == 0 || lex.prev == '\\':
 		lex.token.WriteRune(c)
-	case c == f:
+	case c != f:
 		lex.token.WriteRune(c)
 	default:
 		lex.token.WriteRune(c)

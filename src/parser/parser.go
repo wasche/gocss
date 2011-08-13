@@ -148,7 +148,7 @@ func (p *Parser) collapseZeroes() {
 }
 
 func (p *Parser) Token(token lexer.Token, value string) {
-	//os.Stderr.WriteString("token: "+token+", value: "+value+"\n")
+	//os.Stderr.WriteString("token: "+token.String()+", value: "+value+"\n")
 
 	if p.rgb {
 		switch token {
@@ -311,7 +311,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 				isBoundaryOp(p.lastToken) {
 			p.q(value)
 		} else {
-			if token == lexer.Semicolon {
+			if token == lexer.Colon {
 				p.checkSpace = p.ruleBuffer.Len() + 1 // include pending variable
 			}
 			p.q(" ")
@@ -319,7 +319,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 			p.space = false
 		}
 	case token == lexer.Number && len(value) > 2 && value[:2] == "0.":
-		p.q(value[2:])
+		p.q(value[1:])
 	case token == lexer.String && p.property == "-ms-filter":
 		if len(value) >= len(MS_ALPHA)+2 && strings.ToLower(value[1:len(MS_ALPHA)+1]) == MS_ALPHA {
 			c := value[0:1]
@@ -371,11 +371,11 @@ func (p *Parser) Token(token lexer.Token, value string) {
 				p.q(value)
 			}
 		default:
-			//if in(KEYWORDS, t) {
+			if in(KEYWORDS, t) {
 				p.q(t)
-			//} else {
-			//	p.q(value)
-			//}
+			} else {
+				p.q(value)
+			}
 		}
 	}
 
