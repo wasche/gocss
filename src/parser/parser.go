@@ -6,6 +6,8 @@ import (
 	"./sbuf"
 	"os"
 	"strings"
+	"strconv"
+	"fmt"
 )
 
 const MS_ALPHA = "progid:dximagetransform.microsoft.alpha(opacity="
@@ -60,6 +62,7 @@ func init() {
 	props := [...]string{"border", "margin", "padding"}
 	edges := [...]string{"top", "left", "right", "bottom"}
 	for _, p := range props {
+		NONE_PROPERTIES[p] = true
 		for _, e := range edges {
 			NONE_PROPERTIES[p + "-" + e] = true
 		}
@@ -105,7 +108,7 @@ func (p *Parser) write(str string) {
 	if str == "}" {
 		// check for empty rule
 		s := p.ruleBuffer.Join("")
-		if len(s) >= 2 && s[len(s)-2:] != "{}" {
+		if p.ruleBuffer.Len() == 1 || (len(s) >= 2 && s[len(s)-2:] != "{}") {
 			p.output(s)
 		}
 		p.ruleBuffer.Reset()
@@ -134,7 +137,7 @@ func (p *Parser) collapseZeroes() {
 	switch {
 	case t == "0 0" || t == "0 0 0" || t == "0 0 0 0":
 		p.buffer("0")
-		if p.property == "background-positon" || p.property == "-webkit-transform-origin" || p.property == "-moz-transform-origin" {
+		if p.property == "background-position" || p.property == "-webkit-transform-origin" || p.property == "-moz-transform-origin" {
 			p.buffer(" 0")
 		}
 	case t == "none" && (p.property == "background" || in(NONE_PROPERTIES, p.property)):
@@ -150,13 +153,30 @@ func (p *Parser) Token(token lexer.Token, value string) {
 	if p.rgb {
 		switch token {
 		case lexer.Number:
-			// TODO
+			i, _ := strconv.Atoi(value) 
+			s := fmt.Sprintf("%x", i)
+			if len(s) == 1 { s = "0" + s }
+			p.rgbBuffer.Push(s)
 		case lexer.LeftParen:
 			if p.lastToken == lexer.Number { p.q(" ") }
 			p.q("#")
 			p.rgbBuffer.Reset()
 		case lexer.RightParen:
-			// TODO
+			if p.rgbBuffer.Len() == 3 {
+				a := p.rgbBuffer.At(0)
+				b := p.rgbBuffer.At(1)
+				c := p.rgbBuffer.At(2)
+				if a[0] == a[1] && b[0] == b[1] && c[0] == c[1] {
+					p.q(a[0:1])
+					p.q(b[0:1])
+					p.q(c[0:1])
+				} else {
+					p.q(p.rgbBuffer.Join(""))
+				}
+			} else {
+				p.q(p.rgbBuffer.Join(""))
+			}
+			p.rgb = false
 		}
 		return
 	}
@@ -228,7 +248,9 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		p.at = true
 	case p.inRule && token == lexer.Colon && len(p.property) == 0:
 		p.q(value)
-		if len(p.lastValue) == 0 { p.property = strings.ToLower(p.lastValue) }
+		if len(p.lastValue) != 0 {
+			p.property = strings.ToLower(p.lastValue)
+		}
 		p.valueBuffer.Reset()
 	// first-letter and first-line must be followed by a space
 	case !p.inRule && p.lastToken == lexer.Colon && (value == "first-letter" || value == "first-line"):
@@ -299,7 +321,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 	case token == lexer.Number && len(value) > 2 && value[:2] == "0.":
 		p.q(value[2:])
 	case token == lexer.String && p.property == "-ms-filter":
-		if strings.ToLower(value[1:len(MS_ALPHA)+1]) == MS_ALPHA {
+		if len(value) >= len(MS_ALPHA)+2 && strings.ToLower(value[1:len(MS_ALPHA)+1]) == MS_ALPHA {
 			c := value[0:1]
 			a := value[len(MS_ALPHA)+1:len(value)-2]
 			p.q(c)
@@ -330,7 +352,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		case value == "none" && p.lastToken == lexer.Colon && in(NONE_PROPERTIES, p.property):
 			p.q("0")
 		// force properties to lower case for better gzip compression
-		case token == lexer.Identifier && p.lastToken == lexer.Colon:
+		case token == lexer.Identifier && p.lastToken != lexer.Colon:
 			switch {
 			// #aabbcc
 			case p.lastToken == lexer.Hash:
@@ -349,11 +371,11 @@ func (p *Parser) Token(token lexer.Token, value string) {
 				p.q(value)
 			}
 		default:
-			if in(KEYWORDS, t) {
+			//if in(KEYWORDS, t) {
 				p.q(t)
-			} else {
-				p.q(value)
-			}
+			//} else {
+			//	p.q(value)
+			//}
 		}
 	}
 
