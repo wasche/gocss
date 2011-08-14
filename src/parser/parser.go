@@ -4,10 +4,10 @@ package parser
 import (
 	"./lexer"
 	"./sbuf"
-	"os"
 	"strings"
 	"strconv"
 	"fmt"
+	"os"
 )
 
 const MS_ALPHA = "progid:dximagetransform.microsoft.alpha(opacity="
@@ -69,7 +69,12 @@ func init() {
 	}
 }
 
+type StringWriter interface {
+	WriteString(s string) (ret int, err os.Error)
+}
+
 type Parser struct {
+	Output      StringWriter
 	lastToken   lexer.Token
 	lastValue   string
 	property    string
@@ -86,14 +91,10 @@ type Parser struct {
 	checkSpace  int
 }
 
-func (p *Parser) output(str string) {
-	os.Stdout.WriteString(str)
-}
-
 func (p *Parser) dump(str string) {
 	p.ruleBuffer.Push(p.pending)
 	p.ruleBuffer.Push(str)
-	p.output(p.ruleBuffer.Join(""))
+	p.Output.WriteString(p.ruleBuffer.Join(""))
 	p.ruleBuffer.Reset()
 	p.pending = ZERO_STR
 }
@@ -101,7 +102,7 @@ func (p *Parser) dump(str string) {
 func (p *Parser) write(str string) {
 	if len(str) == 0 { return }
 	if len(str) >= 3 && str[0:3] == "/*!" && p.ruleBuffer.Empty() {
-		p.output(str)
+		p.Output.WriteString(str)
 		return
 	}
 	p.ruleBuffer.Push(str)
@@ -109,7 +110,7 @@ func (p *Parser) write(str string) {
 		// check for empty rule
 		s := p.ruleBuffer.Join("")
 		if p.ruleBuffer.Len() == 1 || (len(s) >= 2 && s[len(s)-2:] != "{}") {
-			p.output(s)
+			p.Output.WriteString(s)
 		}
 		p.ruleBuffer.Reset()
 	}
@@ -387,7 +388,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 func (p *Parser) End() {
 	p.write(p.pending)
 	if !p.ruleBuffer.Empty() {
-		p.output(p.ruleBuffer.Join(""))
+		p.Output.WriteString(p.ruleBuffer.Join(""))
 	}
 }
 

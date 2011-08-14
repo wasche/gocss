@@ -9,16 +9,18 @@ import (
 	"bufio"
 	"flag"
 	"runtime"
+	"strings"
 )
 
 var verbose *bool = flag.Bool("v", false, "Print progress information")
+var regexFrom *string = flag.String("f", ".css", "String to replace")
+var regexTo *string = flag.String("t", "-c.css", "String to replace with (default: -c.css")
 
-func process(f *os.File) {
-	parser := new(parser.Parser)
-	lexer := new(lexer.Lexer)
-	lexer.SetParser(parser)
+func process(in *os.File, out *os.File) {
+	parser := &parser.Parser{Output: out}
+	lexer := &lexer.Lexer{Parser: parser}
 	defer lexer.End()
-	reader := bufio.NewReader(f)
+	reader := bufio.NewReader(in)
 	for {
 		r, s, er := reader.ReadRune()
 		switch {
@@ -33,18 +35,25 @@ func process(f *os.File) {
 	}
 }
 
+func processFile(name string, i int) {
+	target := strings.Replace(name, *regexFrom, *regexTo, 1)
+	fi, err := os.Open(name)
+	fo, err := os.Create(target)
+	defer fi.Close()
+	defer fo.Close()
+	if fi == nil {
+		fmt.Fprintf(os.Stderr, "can't open %s: error %s\n", name, err)
+		os.Exit(1)
+	}
+	if *verbose { fmt.Fprintf(os.Stderr, "[%d] Compressing %s\n", i, name) }
+	process(fi, fo)
+}
+
 func processFiles(i int, queue chan(string), result chan(int)) {
 	for {
 		select {
 		case name := <-queue:
-			f, err := os.Open(name)
-			if f == nil {
-				fmt.Fprintf(os.Stderr, "can't open %s: error %s\n", name, err)
-				os.Exit(1)
-			}
-			if *verbose { fmt.Fprintf(os.Stderr, "[%d] Compressing %s\n", i, name) }
-			process(f)
-			f.Close()
+			processFile(name, i)
 		default:
 			result <- 0
 			return
@@ -57,7 +66,7 @@ func main() {
 	n := flag.NArg()
 
 	if flag.NArg() == 0 {
-		process(os.Stdin)
+		process(os.Stdin, os.Stdout)
 		return
 	}
 	
@@ -78,7 +87,7 @@ func main() {
 	}
 
 	// wait for all jobs to complete
-	for i := 0; i < threads; i++ {
+	for i := 0 ; i < threads; i++ {
 		<-result
 	}
 }

@@ -11,11 +11,11 @@ type Parser interface {
 }
 
 type Lexer struct {
+	Parser Parser
 	token bytes.Buffer
 	prev int
 	lastToken string
 	handler HandlerFn
-	parser Parser
 }
 
 func isDigit(c int) bool {
@@ -24,10 +24,6 @@ func isDigit(c int) bool {
 
 func isNameChar(c int) bool {
 	return c == '_' || c == '-' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-}
-
-func (lex *Lexer) SetParser(p Parser) {
-	lex.parser = p
 }
 
 func (lex *Lexer) whitespace(c int) {
@@ -135,7 +131,7 @@ func (lex *Lexer) operator(c int) {
 
 func (lex *Lexer) next(t Token) {
 	value := lex.token.String()
-	lex.parser.Token(t, value)
+	lex.Parser.Token(t, value)
 	lex.lastToken = value
 }
 
@@ -172,7 +168,7 @@ func (lex *Lexer) End() {
 	// still something in buffer, assuming whitespace
 	case lex.token.Len() > 0:
 		value := lex.token.String()
-		lex.parser.Token(Whitespace, value)
+		lex.Parser.Token(Whitespace, value)
 	}
-	lex.parser.End()
+	lex.Parser.End()
 }
