@@ -91,7 +91,9 @@ type Parser struct {
 	charset     bool
 	at          bool
 	ie5mac      bool
+	ie5macOn    bool
 	rgb         bool
+	rgba        bool
 	checkSpace  int
 }
 
@@ -113,18 +115,28 @@ func (p *Parser) write(str string) {
 	if str == "}" {
 		// check for empty rule
 		s := p.ruleBuffer.Join("")
-		if p.ruleBuffer.Len() == 1 || (len(s) >= 2 && s[len(s)-2:] != "{}") {
-			p.Output.WriteString(s)
-		}
+		nonempty := p.ruleBuffer.Len() == 1 || (len(s) >= 2 && s[len(s)-2:] != "{}")
+		if nonempty { p.Output.WriteString(s) }
 		p.ruleBuffer.Reset()
+		if !nonempty && p.ie5macOn {
+			// there is a starting ie5mac comment in the buffer, leave it there
+			if p.pending == "/**/" {
+				// unless the next token is the ending comment
+				p.pending = ZERO_STR
+				p.ie5macOn = false
+			} else {
+				p.ruleBuffer.Push("/*\\*/")
+			}
+		}
 	}
 }
 
 func (p *Parser) buffer(str string) {
-	if p.pending != ZERO_STR {
-		p.write(p.pending)
+	var s string
+	s, p.pending = p.pending, str
+	if s != ZERO_STR {
+		p.write(s)
 	}
-	p.pending = str
 }
 
 func (p *Parser) q(str string) {
@@ -199,16 +211,18 @@ func (p *Parser) Token(token lexer.Token, value string) {
 			p.q(value)
 			p.lastToken = token
 			p.lastValue = value
-		case len(value) >= 3 && value[len(value)-3:len(value)-2] == "\\":
+		case len(value) >= 3 && value[len(value)-3:] == "\\*/":
 			p.q("/*\\*/")
 			p.lastToken = token
 			p.lastValue = value
 			p.ie5mac = true
-		case p.ie5mac:
+			p.ie5macOn = true
+		case p.ie5mac && p.ie5macOn:
 			p.q("/**/")
 			p.lastToken = token
 			p.lastValue = value
 			p.ie5mac = false
+			p.ie5macOn = false
 		case p.lastToken == lexer.Child:
 			p.q("/**/")
 			p.lastToken = token
@@ -240,14 +254,19 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		p.space = false
 	}
 
-	// rgb()
-	if token == lexer.Identifier && value == "rgb" {
-		p.space = false
-		p.rgb = true
-		return
-	}
 
 	switch {
+	// rgb()
+	case token == lexer.Identifier && value == "rgb":
+		p.rgb = true
+		p.space = false
+		return
+	case p.Yui && token == lexer.Identifier && value == "rgba":
+		p.rgba = true
+		p.q(value)
+	case p.Yui && p.rgba && token == lexer.RightParen:
+		p.rgba = false
+		p.q(value)
 	case token == lexer.At:
 		p.q(value)
 		p.at = true
@@ -323,7 +342,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 			p.q(value)
 			p.space = false
 		}
-	case token == lexer.Number && len(value) > 2 && value[:2] == "0.":
+	case token == lexer.Number && len(value) > 2 && value[:2] == "0." && !(p.Yui && p.rgba):
 		p.q(value[1:])
 	case token == lexer.String && p.property == "-ms-filter":
 		if len(value) >= len(MS_ALPHA)+2 && strings.ToLower(value[1:len(MS_ALPHA)+1]) == MS_ALPHA {
