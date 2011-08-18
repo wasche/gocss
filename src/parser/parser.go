@@ -43,6 +43,9 @@ var (
 		lexer.Colon:      true,
 		lexer.Comma:      true,
 		lexer.Comment:    true,
+		lexer.LeftParen:  true,
+		lexer.RightParen: true,
+		lexer.Match:      true,
 	}
 	NONE_PROPERTIES = make(map[string]bool, 15)
 )
@@ -75,6 +78,7 @@ type StringWriter interface {
 
 type Parser struct {
 	Output      StringWriter
+	Yui         bool
 	lastToken   lexer.Token
 	lastValue   string
 	property    string
@@ -231,7 +235,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 	bb := wasId || wasPct || wasRP
 	b := ba && bb
 
-	if a || b {
+	if a || b || (token == lexer.String && !isBoundaryOp(p.lastToken)) {
 		p.q(" ")
 		p.space = false
 	}
@@ -361,12 +365,19 @@ func (p *Parser) Token(token lexer.Token, value string) {
 						t[0] == t[1] &&
 						t[2] == t[3] &&
 						t[4] == t[5] {
-					p.q(t[1:3])
-					p.q(t[4:5])
+					//if p.Yui {
+					//	p.q(value[1:3])
+					//	p.q(value[4:5])
+					//} else {
+						p.q(t[1:3])
+						p.q(t[4:5])
+					//}
+				//} else if p.Yui {
+				//	p.q(value)
 				} else {
 					p.q(t)
 				}
-			case len(p.property) == 0 || in(KEYWORDS, t):
+			case p.property == ZERO_STR || in(KEYWORDS, t):
 				p.q(t)
 			default:
 				p.q(value)

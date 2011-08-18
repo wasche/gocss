@@ -15,9 +15,10 @@ import (
 var verbose *bool = flag.Bool("v", false, "Print progress information")
 var regexFrom *string = flag.String("f", ".css", "String to replace")
 var regexTo *string = flag.String("t", "-c.css", "String to replace with (default: -c.css")
+var yui *bool = flag.Bool("y", false, "Match output to YUI Compressor v2.4.6")
 
 func process(in *os.File, out *os.File) {
-	parser := &parser.Parser{Output: out}
+	parser := &parser.Parser{Output: out, Yui: *yui}
 	lexer := &lexer.Lexer{Parser: parser}
 	defer lexer.End()
 	reader := bufio.NewReader(in)
