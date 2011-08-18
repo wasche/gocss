@@ -247,7 +247,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 
 	ba := isNum || isId || isHash
 	bb := wasId || wasPct || wasRP
-	b := ba && bb
+	b := ba && bb && p.space
 
 	if a || b || (token == lexer.String && !isBoundaryOp(p.lastToken)) {
 		p.q(" ")
@@ -331,8 +331,8 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		p.property = ZERO_STR
 		p.inRule = false
 	case !p.inRule:
-		if !p.space || token == lexer.Child || (!p.space && token == lexer.Colon) || p.lastToken == ZERO_TOKEN ||
-				isBoundaryOp(p.lastToken) {
+		if !p.space || token == lexer.Child || (!p.space && token == lexer.Colon) ||
+				p.lastToken == ZERO_TOKEN || isBoundaryOp(p.lastToken) {
 			p.q(value)
 		} else {
 			if token == lexer.Colon {
