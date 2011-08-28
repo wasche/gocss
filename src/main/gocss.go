@@ -14,8 +14,15 @@ import (
 
 var verbose *bool = flag.Bool("v", false, "Print progress information")
 var regexFrom *string = flag.String("f", ".css", "String to replace")
-var regexTo *string = flag.String("t", "-c.css", "String to replace with (default: -c.css")
+var regexTo *string = flag.String("t", "-c.css", "String to replace with (default: -c.css)")
 var yui *bool = flag.Bool("y", false, "Match output to YUI Compressor v2.4.6")
+// right to left conversion
+var convert *bool = flag.Bool("c", false, "Convert for right to left languages")
+var regexRTL *string = flag.String("r", "-rtl-c.css", "String to replace with for RTL (default: -rtl-c.css)")
+var convertSource *bool = flag.Bool("C", false, "Convert source file for right to left languages")
+var regexRTLS *string = flag.String("R", "-rtl.css", "String to replace with for RTL source (default: -rtl.css)")
+// configuration file
+var config *string = flag.String("i", "gocss.cfg", "File to read configuration from (default: gocss.cfg)")
 
 func process(in *os.File, out *os.File) {
 	parser := &parser.Parser{Output: out, Yui: *yui}
@@ -67,10 +74,12 @@ func main() {
 	n := flag.NArg()
 
 	if flag.NArg() == 0 {
+		// check for configuration file
+
 		process(os.Stdin, os.Stdout)
 		return
 	}
-	
+
 	threads := 4
 
 	if threads > n { threads = n }
