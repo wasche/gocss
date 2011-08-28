@@ -36,6 +36,8 @@ const (
 	Bang
 )
 
+var EndToken Token
+
 func (b Token) String() string {
 	switch b {
 	case Whitespace:

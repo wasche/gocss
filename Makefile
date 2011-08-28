@@ -1,7 +1,7 @@
 include $(GOROOT)/src/Make.inc
 
 TARG=gocss
-GOFILES=src/main/gocss.go
+GOFILES=src/main/filestreamer.go src/main/gocss.go
 O_FILES=lexer.$O sbuf.$O parser.$O
 
 all: $(O_FILES)

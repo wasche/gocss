@@ -7,13 +7,11 @@ import (
 	"strings"
 	"strconv"
 	"fmt"
-	"os"
 )
 
 const MS_ALPHA = "progid:dximagetransform.microsoft.alpha(opacity="
 
 var ZERO_STR string
-var ZERO_TOKEN lexer.Token
 
 var (
 	UNITS           = map[string] bool {
@@ -72,12 +70,9 @@ func init() {
 	}
 }
 
-type StringWriter interface {
-	WriteString(s string) (ret int, err os.Error)
-}
-
 type Parser struct {
-	Output      StringWriter
+	In          chan(lexer.TokenValue)
+	Out         chan(string)
 	Yui         bool
 	lastToken   lexer.Token
 	lastValue   string
@@ -100,7 +95,7 @@ type Parser struct {
 func (p *Parser) dump(str string) {
 	p.ruleBuffer.Push(p.pending)
 	p.ruleBuffer.Push(str)
-	p.Output.WriteString(p.ruleBuffer.Join(""))
+	p.Out <- p.ruleBuffer.Join("")
 	p.ruleBuffer.Reset()
 	p.pending = ZERO_STR
 }
@@ -108,7 +103,7 @@ func (p *Parser) dump(str string) {
 func (p *Parser) write(str string) {
 	if len(str) == 0 { return }
 	if len(str) >= 3 && str[0:3] == "/*!" && p.ruleBuffer.Empty() {
-		p.Output.WriteString(str)
+		p.Out <- str
 		return
 	}
 	p.ruleBuffer.Push(str)
@@ -116,7 +111,7 @@ func (p *Parser) write(str string) {
 		// check for empty rule
 		s := p.ruleBuffer.Join("")
 		nonempty := p.ruleBuffer.Len() == 1 || (len(s) >= 2 && s[len(s)-2:] != "{}")
-		if nonempty { p.Output.WriteString(s) }
+		if nonempty { p.Out <- s }
 		p.ruleBuffer.Reset()
 		if !nonempty && p.ie5macOn {
 			// there is a starting ie5mac comment in the buffer, leave it there
@@ -164,7 +159,7 @@ func (p *Parser) collapseZeroes() {
 	}
 }
 
-func (p *Parser) Token(token lexer.Token, value string) {
+func (p *Parser) token(token lexer.Token, value string) {
 	//os.Stderr.WriteString("token: "+token.String()+", value: "+value+"\n")
 
 	if p.rgb {
@@ -332,7 +327,7 @@ func (p *Parser) Token(token lexer.Token, value string) {
 		p.inRule = false
 	case !p.inRule:
 		if !p.space || token == lexer.Child || (!p.space && token == lexer.Colon) ||
-				p.lastToken == ZERO_TOKEN || isBoundaryOp(p.lastToken) {
+				p.lastToken == lexer.EndToken || isBoundaryOp(p.lastToken) {
 			p.q(value)
 		} else {
 			if token == lexer.Colon {
@@ -384,15 +379,8 @@ func (p *Parser) Token(token lexer.Token, value string) {
 						t[0] == t[1] &&
 						t[2] == t[3] &&
 						t[4] == t[5] {
-					//if p.Yui {
-					//	p.q(value[1:3])
-					//	p.q(value[4:5])
-					//} else {
-						p.q(t[1:3])
-						p.q(t[4:5])
-					//}
-				//} else if p.Yui {
-				//	p.q(value)
+					p.q(t[1:3])
+					p.q(t[4:5])
 				} else {
 					p.q(t)
 				}
@@ -415,10 +403,23 @@ func (p *Parser) Token(token lexer.Token, value string) {
 	p.space = false
 }
 
-func (p *Parser) End() {
+func (p *Parser) end() {
 	p.write(p.pending)
 	if !p.ruleBuffer.Empty() {
-		p.Output.WriteString(p.ruleBuffer.Join(""))
+		p.Out <- p.ruleBuffer.Join("")
 	}
 }
 
+func (p *Parser) Run() {
+	var tv lexer.TokenValue
+	for {
+		tv = <- p.In
+		if tv.Token == lexer.EndToken {
+			p.end()
+			p.Out <- ZERO_STR
+			return
+		} else {
+			p.token(tv.Token, tv.Value)
+		}
+	}
+}

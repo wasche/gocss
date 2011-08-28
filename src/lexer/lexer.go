@@ -5,13 +5,14 @@ import "bytes"
 
 type HandlerFn func(*Lexer, int)
 
-type Parser interface {
-	Token(Token, string)
-	End()
+type TokenValue struct {
+	Token Token
+	Value string
 }
 
 type Lexer struct {
-	Parser Parser
+	In chan(int)
+	Out chan(TokenValue)
 	token bytes.Buffer
 	prev int
 	lastToken string
@@ -35,7 +36,7 @@ func (lex *Lexer) whitespace(c int) {
 		lex.next(Whitespace)
 		lex.token.Reset()
 		lex.handler = nil
-		lex.Tokenize(c)
+		lex.tokenize(c)
 	}
 }
 
@@ -81,7 +82,7 @@ func (lex *Lexer) identifier(c int) {
 		lex.next(Identifier)
 		lex.token.Reset()
 		lex.handler = nil
-		lex.Tokenize(c)
+		lex.tokenize(c)
 	}
 }
 
@@ -94,7 +95,7 @@ func (lex *Lexer) number(c int) {
 		lex.next(Period)
 		lex.token.Reset()
 		lex.handler = nil
-		lex.Tokenize(c)
+		lex.tokenize(c)
 	// -2px or -moz-something
 	case '-' == lex.prev && nondigit && c != '.':
 		lex.handler = (*Lexer).identifier
@@ -108,7 +109,7 @@ func (lex *Lexer) number(c int) {
 		lex.next(Number)
 		lex.token.Reset()
 		lex.handler = nil
-		lex.Tokenize(c)
+		lex.tokenize(c)
 	}
 }
 
@@ -125,13 +126,13 @@ func (lex *Lexer) operator(c int) {
 		lex.next(TokenMap[lex.prev])
 		lex.token.Reset()
 		lex.handler = nil
-		lex.Tokenize(c)
+		lex.tokenize(c)
 	}
 }
 
 func (lex *Lexer) next(t Token) {
 	value := lex.token.String()
-	lex.Parser.Token(t, value)
+	lex.Out <- TokenValue{t, value}
 	lex.lastToken = value
 }
 
@@ -151,7 +152,7 @@ func (lex *Lexer) handlerForToken(t Token) (fn HandlerFn) {
 	return (*Lexer).operator
 }
 
-func (lex *Lexer) Tokenize(c int) {
+func (lex *Lexer) tokenize(c int) {
 	if lex.handler == nil {
 		token := TokenMap[c]
 		lex.handler = lex.handlerForToken(token)
@@ -160,15 +161,27 @@ func (lex *Lexer) Tokenize(c int) {
 	lex.prev = c
 }
 
-func (lex *Lexer) End() {
+func (lex *Lexer) end() {
 	switch {
 	// finish the current token
 	case lex.handler != nil:
 		lex.handler(lex, -1)
 	// still something in buffer, assuming whitespace
 	case lex.token.Len() > 0:
-		value := lex.token.String()
-		lex.Parser.Token(Whitespace, value)
+		lex.next(Whitespace)
 	}
-	lex.Parser.End()
+	lex.Out <- TokenValue{EndToken, ""}
+}
+
+func (lex *Lexer) Run() {
+	var c int
+	for {
+		c = <- lex.In
+		if c == -1 {
+			lex.end()
+			return
+		} else {
+			lex.tokenize(c)
+		}
+	}
 }

@@ -6,7 +6,6 @@ import (
 	"./parser"
 	"fmt"
 	"os"
-	"bufio"
 	"flag"
 	"runtime"
 	"strings"
@@ -25,22 +24,23 @@ var regexRTLS *string = flag.String("R", "-rtl.css", "String to replace with for
 var config *string = flag.String("i", "gocss.cfg", "File to read configuration from (default: gocss.cfg)")
 
 func process(in *os.File, out *os.File) {
-	parser := &parser.Parser{Output: out, Yui: *yui}
-	lexer := &lexer.Lexer{Parser: parser}
-	defer lexer.End()
-	reader := bufio.NewReader(in)
-	for {
-		r, s, er := reader.ReadRune()
-		switch {
-		case s < 0:
-			fmt.Fprintf(os.Stderr, "error reading: %s\n", er.String())
-			os.Exit(1)
-		case s == 0: // EOF
-			return
-		case s > 0:
-			lexer.Tokenize(r)
-		}
-	}
+	// set up channels
+	runes := make(chan(int))
+	tokenValues := make(chan(lexer.TokenValue))
+	minified := make(chan(string))
+	eof := make(chan(int))
+
+	ifs := &InputFileStreamer{In: in, Out: runes}
+	lexer := &lexer.Lexer{In: runes, Out: tokenValues}
+	parser := &parser.Parser{In: tokenValues, Out: minified, Yui: *yui}
+	ofs := &OutputFileStreamer{In: minified, Out: out, Eof: eof}
+
+	go ifs.Run()
+	go lexer.Run()
+	go parser.Run()
+	go ofs.Run()
+
+	<- eof
 }
 
 func processFile(name string, i int) {
