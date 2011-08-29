@@ -34,9 +34,9 @@ func process(in *os.File, out *os.File) {
 	ifs := &InputFileStreamer{In: in, Out: runes}
 	lexer := &lexer.Lexer{In: runes, Out: tokenValues}
 	// TODO generated file using TokenValueFileStreamer
-	// TODO generated RTL
+	// TODO generated RTL - dual channel, pass-through and output
 	parser := &parser.Parser{In: tokenValues, Out: minified, Yui: *yui}
-	// TODO compressed RTL
+	// TODO compressed RTL - dual channel, pass-through and output
 	ofs := &OutputFileStreamer{In: minified, Out: out, Eof: eof}
 
 	go ifs.Run()
