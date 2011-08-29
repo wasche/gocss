@@ -12,16 +12,16 @@ import (
 )
 
 var verbose *bool = flag.Bool("v", false, "Print progress information")
-var regexFrom *string = flag.String("f", ".css", "String to replace")
-var regexTo *string = flag.String("t", "-c.css", "String to replace with (default: -c.css)")
+var suffixGenerated *string = flag.String("f", ".css", "Suffix of generated files (default: -gen.css)")
+var suffixCompressed *string = flag.String("t", "-c.css", "Suffix of compressed files (default: -c.css)")
 var yui *bool = flag.Bool("y", false, "Match output to YUI Compressor v2.4.6")
 // right to left conversion
 var convert *bool = flag.Bool("c", false, "Convert for right to left languages")
-var regexRTL *string = flag.String("r", "-rtl-c.css", "String to replace with for RTL (default: -rtl-c.css)")
 var convertSource *bool = flag.Bool("C", false, "Convert source file for right to left languages")
-var regexRTLS *string = flag.String("R", "-rtl.css", "String to replace with for RTL source (default: -rtl.css)")
+var suffixRTLS *string = flag.String("R", "-rtl.css", "Suffix of generated RTL files (default: -rtl.css)")
+var suffixRTL *string = flag.String("r", "-rtl-c.css", "Suffix of compressed RTL files (default: -rtl-c.css)")
 // configuration file
-var config *string = flag.String("i", "gocss.cfg", "File to read configuration from (default: gocss.cfg)")
+var config *string = flag.String("i", "gocss.cfg", "File to read configuration from (default: Makefile.gcs)")
 
 func process(in *os.File, out *os.File) {
 	// set up channels
@@ -30,9 +30,13 @@ func process(in *os.File, out *os.File) {
 	minified := make(chan(string))
 	eof := make(chan(int))
 
+	// TODO multi file input streamer
 	ifs := &InputFileStreamer{In: in, Out: runes}
 	lexer := &lexer.Lexer{In: runes, Out: tokenValues}
+	// TODO generated file using TokenValueFileStreamer
+	// TODO generated RTL
 	parser := &parser.Parser{In: tokenValues, Out: minified, Yui: *yui}
+	// TODO compressed RTL
 	ofs := &OutputFileStreamer{In: minified, Out: out, Eof: eof}
 
 	go ifs.Run()
@@ -40,11 +44,12 @@ func process(in *os.File, out *os.File) {
 	go parser.Run()
 	go ofs.Run()
 
+	// wait for chain to finish
 	<- eof
 }
 
 func processFile(name string, i int) {
-	target := strings.Replace(name, *regexFrom, *regexTo, 1)
+	target := strings.Replace(name, *suffixGenerated, *suffixCompressed, 1)
 	fi, err := os.Open(name)
 	fo, err := os.Create(target)
 	defer fi.Close()
