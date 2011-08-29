@@ -11,17 +11,20 @@ import (
 	"strings"
 )
 
+// general options
+var suffixGenerated *string = flag.String("g", "-gen.css", "Suffix of generated files")
+var suffixCompressed *string = flag.String("c", "-c.css", "Suffix of compressed files")
 var verbose *bool = flag.Bool("v", false, "Print progress information")
-var suffixGenerated *string = flag.String("f", ".css", "Suffix of generated files (default: -gen.css)")
-var suffixCompressed *string = flag.String("t", "-c.css", "Suffix of compressed files (default: -c.css)")
 var yui *bool = flag.Bool("y", false, "Match output to YUI Compressor v2.4.6")
 // right to left conversion
-var convert *bool = flag.Bool("c", false, "Convert for right to left languages")
-var convertSource *bool = flag.Bool("C", false, "Convert source file for right to left languages")
-var suffixRTLS *string = flag.String("R", "-rtl.css", "Suffix of generated RTL files (default: -rtl.css)")
-var suffixRTL *string = flag.String("r", "-rtl-c.css", "Suffix of compressed RTL files (default: -rtl-c.css)")
+var convert *bool = flag.Bool("r", false, "Convert for right to left languages")
+var convertGen *bool = flag.Bool("R", false, "Convert generated file for right to left languages")
+var suffixRTLS *string = flag.String("G", "-rtl.css", "Suffix of generated RTL files")
+var suffixRTL *string = flag.String("C", "-rtl-c.css", "Suffix of compressed RTL files")
 // configuration file
-var config *string = flag.String("i", "gocss.cfg", "File to read configuration from (default: Makefile.gcs)")
+var config *string = flag.String("i", "Makefile.gcs", "File to read configuration from")
+var createConfig *bool = flag.Bool("T", false, "Output a sample configuration file")
+var generate *bool = flag.Bool("o", false, "Output generated files")
 
 func process(in *os.File, out *os.File) {
 	// set up channels
