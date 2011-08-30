@@ -2,7 +2,7 @@ include $(GOROOT)/src/Make.inc
 
 TARG=gocss
 GOFILES=src/main/filestreamer.go src/main/gocss.go
-O_FILES=lexer.$O sbuf.$O parser.$O
+O_FILES=lexer.$O sbuf.$O parser.$O rtl.$O
 
 all: $(O_FILES)
 install: $(O_FILES)
@@ -17,6 +17,9 @@ parser.$O:
 
 sbuf.$O:
 	$(GC) -o sbuf.$O src/sbuf/stringbuffer.go
+
+rtl.$O:
+	$(GC) -o rtl.$O src/rtl/rtl.go
 
 test:
 	./run-tests.sh

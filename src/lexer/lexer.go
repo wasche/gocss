@@ -19,6 +19,12 @@ type Lexer struct {
 	handler HandlerFn
 }
 
+func CreateLexer(in chan(int)) (lex *Lexer, out chan(TokenValue)) {
+	out = make(chan(TokenValue))
+	lex = &Lexer{In: in, Out: out}
+	return
+}
+
 func isDigit(c int) bool {
 	return c >= '0' && c <= '9'
 }

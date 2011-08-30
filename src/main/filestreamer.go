@@ -33,6 +33,12 @@ func (fs *InputFileStreamer) Run() {
 	}
 }
 
+func CreateInputFileStreamer(file *os.File) (ifs *InputFileStreamer, out chan(int)) {
+	out = make(chan(int))
+	ifs = &InputFileStreamer{In: file, Out: out}
+	return
+}
+
 var ZERO_STR string
 
 type OutputFileStreamer struct {
@@ -55,6 +61,12 @@ func (fs *OutputFileStreamer) Run() {
 	}
 }
 
+func CreateOutputFileStreamer (in chan(string), file *os.File) (ofs *OutputFileStreamer, eof chan(int)) {
+	eof = make(chan(int))
+	ofs = &OutputFileStreamer{In: in, Out: file, Eof: eof}
+	return
+}
+
 type TeeFileStreamer struct {
 	In   chan(string)
 	Out  chan(string)
@@ -65,13 +77,12 @@ func (fs *TeeFileStreamer) Run() {
 	var s string
 	for {
 		s = <- fs.In
+		fs.Out <- s
 		switch (s) {
 		case ZERO_STR:
-			fs.Out <- s
 			return
 		default:
 			fs.File.WriteString(s)
-			fs.Out <- s
 		}
 	}
 }
@@ -86,12 +97,41 @@ func (fs *TokenValueFileStreamer) Run() {
 	var s lexer.TokenValue
 	for {
 		s = <- fs.In
+		fs.Out <- s
 		switch {
 		case s.Token == lexer.EndToken:
 			return
 		default:
 			fs.File.WriteString(s.Value)
-			fs.Out <- s
 		}
 	}
+}
+
+func CreateTokenValueFileStreamer(in chan(lexer.TokenValue), file *os.File) (tvfs *TokenValueFileStreamer, out chan(lexer.TokenValue)) {
+	out = make(chan(lexer.TokenValue))
+	tvfs = &TokenValueFileStreamer{In: in, File: file, Out: out}
+	return
+}
+
+type ChannelSplitter struct {
+  In   chan(lexer.TokenValue)
+  Out1 chan(lexer.TokenValue)
+  Out2 chan(lexer.TokenValue)
+}
+
+func (fs *ChannelSplitter) Run() {
+	var s lexer.TokenValue
+	for {
+		s = <- fs.In
+		fs.Out1 <- s
+		fs.Out2 <- s
+		if s.Token == lexer.EndToken { return }
+	}
+}
+
+func CreateChannelSplitter(in chan(lexer.TokenValue)) (cs *ChannelSplitter, out1 chan(lexer.TokenValue), out2 chan(lexer.TokenValue)) {
+	out1 = make(chan(lexer.TokenValue))
+	out2 = make(chan(lexer.TokenValue))
+	cs = &ChannelSplitter{In: in, Out1: out1, Out2: out2}
+	return
 }

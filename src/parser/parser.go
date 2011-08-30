@@ -92,6 +92,12 @@ type Parser struct {
 	checkSpace  int
 }
 
+func CreateParser(in chan(lexer.TokenValue), yui bool) (parser *Parser, out chan(string)) {
+	out = make(chan(string))
+	parser = &Parser{In: in, Out: out, Yui: yui}
+	return
+}
+
 func (p *Parser) dump(str string) {
 	p.ruleBuffer.Push(p.pending)
 	p.ruleBuffer.Push(str)
