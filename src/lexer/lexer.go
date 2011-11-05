@@ -10,6 +10,8 @@ type TokenValue struct {
 	Value string
 }
 
+var EmptyTokenValue TokenValue
+
 type Lexer struct {
 	In chan(int)
 	Out chan(TokenValue)

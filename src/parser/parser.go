@@ -72,15 +72,14 @@ func init() {
 
 type Parser struct {
 	In          chan(lexer.TokenValue)
-	Out         chan(string)
+	Out         chan(lexer.TokenValue)
 	Yui         bool
-	lastToken   lexer.Token
-	lastValue   string
+	last        lexer.TokenValue
 	property    string
-	ruleBuffer  sbuf.StringBuffer
-	valueBuffer sbuf.StringBuffer
+	ruleBuffer  TokenValueList
+	valueBuffer TokenValueList
 	rgbBuffer   sbuf.StringBuffer
-	pending     string
+	pending     lexer.TokenValue
 	inRule      bool
 	space       bool
 	charset     bool
@@ -92,57 +91,60 @@ type Parser struct {
 	checkSpace  int
 }
 
-func CreateParser(in chan(lexer.TokenValue), yui bool) (parser *Parser, out chan(string)) {
-	out = make(chan(string))
+func CreateParser(in chan(lexer.TokenValue), yui bool) (parser *Parser, out chan(lexer.TokenValue)) {
+	out = make(chan(lexer.TokenValue))
 	parser = &Parser{In: in, Out: out, Yui: yui}
 	return
 }
 
-func (p *Parser) dump(str string) {
+func (p *Parser) dump(str lexer.TokenValue) {
 	p.ruleBuffer.Push(p.pending)
 	p.ruleBuffer.Push(str)
-	p.Out <- p.ruleBuffer.Join("")
+	for i := 0; i < len(p.ruleBuffer); i++ {
+		p.Out <- p.ruleBuffer[i]
+	}
 	p.ruleBuffer.Reset()
-	p.pending = ZERO_STR
+	p.pending = lexer.EmptyTokenValue
 }
 
-func (p *Parser) write(str string) {
-	if len(str) == 0 { return }
-	if len(str) >= 3 && str[0:3] == "/*!" && p.ruleBuffer.Empty() {
+func (p *Parser) write(str lexer.TokenValue) {
+	if len(str.Value) == 0 { return }
+	if len(str.Value) >= 3 && str.Value[0:3] == "/*!" && p.ruleBuffer.Empty() {
 		p.Out <- str
 		return
 	}
 	p.ruleBuffer.Push(str)
-	if str == "}" {
+	if str.Token == lexer.RightBrace {
 		// check for empty rule
-		s := p.ruleBuffer.Join("")
-		nonempty := p.ruleBuffer.Len() == 1 || (len(s) >= 2 && s[len(s)-2:] != "{}")
-		if nonempty { p.Out <- s }
+		nonempty := p.ruleBuffer.Len() == 1 || p.ruleBuffer.At(p.ruleBuffer.Len()-2).Token == lexer.LeftBrace
+		if nonempty {
+			p.Out <- s
+		}
 		p.ruleBuffer.Reset()
 		if !nonempty && p.ie5macOn {
 			// there is a starting ie5mac comment in the buffer, leave it there
-			if p.pending == "/**/" {
+			if p.pending.Value == "/**/" {
 				// unless the next token is the ending comment
-				p.pending = ZERO_STR
+				p.pending = lexer.EmptyTokenValue
 				p.ie5macOn = false
 			} else {
-				p.ruleBuffer.Push("/*\\*/")
+				p.ruleBuffer.Push(lexer.TokenValue{lexer.Comment, "/*\\*/"})
 			}
 		}
 	}
 }
 
-func (p *Parser) buffer(str string) {
-	var s string
+func (p *Parser) buffer(str lexer.TokenValue) {
+	var s lexer.TokenValue
 	s, p.pending = p.pending, str
-	if s != ZERO_STR {
+	if s != lexer.EmptyTokenValue {
 		p.write(s)
 	}
 }
 
-func (p *Parser) q(str string) {
+func (p *Parser) q(str lexer.TokenValue) {
 	switch {
-	case p.property == ZERO_STR:
+	case p.property == lexer.EmptyTokenValue:
 		p.buffer(str)
 	default:
 		p.valueBuffer.Push(str)
@@ -154,18 +156,22 @@ func (p *Parser) collapseZeroes() {
 	p.valueBuffer.Reset()
 	switch {
 	case t == "0 0" || t == "0 0 0" || t == "0 0 0 0":
-		p.buffer("0")
+		p.buffer(lexer.TokenValue{lexer.Number, "0"})
 		if p.property == "background-position" || p.property == "-webkit-transform-origin" || p.property == "-moz-transform-origin" {
-			p.buffer(" 0")
+			p.buffer(lexer.TokenValue{lexer.Whitespace, " "})
+			p.buffer(lexer.TokenValue{lexer.Number, "0"})
 		}
 	case t == "none" && (p.property == "background" || in(NONE_PROPERTIES, p.property)):
-		p.buffer("0")
+		p.buffer(lexer.TokenValue{lexer.Number, "0"})
 	default:
-		p.buffer(t)
+		p.ruleBuffer.PushAll(p.valueBuffer)
+		p.pending = lexer.EmptyTokenValue
 	}
 }
 
-func (p *Parser) token(token lexer.Token, value string) {
+func (p *Parser) token(tokenValue lexer.TokenValue) {
+	token := tokenValue.Token
+	value := tokenValue.Value
 	//os.Stderr.WriteString("token: "+token.String()+", value: "+value+"\n")
 
 	if p.rgb {

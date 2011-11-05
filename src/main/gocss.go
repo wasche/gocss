@@ -157,21 +157,21 @@ func processFile(name string, threadNum int) {
 
 	if *convert {
 		rtlName := strings.Replace(name, *suffixGenerated, *suffixRTL, 1)
-//		rtlFile, err := os.Create(rtlName)
-//		if err != nil {
-//			fmt.Fprintf(os.Stderr, "Can't create %s: error %s\n", rtl, err)
-//			return
-//		}
-//		defer rtlFile.Close()
+		rtlFile, err := os.Create(rtlName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Can't create %s: error %s\n", rtl, err)
+			return
+		}
+		defer rtlFile.Close()
 
 		if *verbose { fmt.Fprintf(os.Stderr, "[%d] Converting: %s\n", threadNum, rtlName) }
 
 		// split channels
-//		splitter, out3, out4 := CreateChannelSplitter(minified)
-//		go splitter.Run()
-//		converter := rtl.CreateConverter(out4, rtlFile)
-//		go converter.Run()
-//		minified = out3
+		splitter, out3, out4 := CreateChannelSplitter(minified)
+		go splitter.Run()
+		converter := rtl.CreateConverter(out4, rtlFile)
+		go converter.Run()
+		minified = out3
 	}
 
 	ofs, eof := CreateOutputFileStreamer(minified, fo)

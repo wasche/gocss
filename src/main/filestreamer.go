@@ -42,26 +42,26 @@ func CreateInputFileStreamer(file *os.File) (ifs *InputFileStreamer, out chan(in
 var ZERO_STR string
 
 type OutputFileStreamer struct {
-	In  chan(string)
+	In  chan(lexer.TokenValue)
 	Out *os.File
 	Eof chan(int)
 }
 
 func (fs *OutputFileStreamer) Run() {
-	var s string
+	var s lexer.TokenValue
 	for {
 		s = <- fs.In
-		switch (s) {
-		case ZERO_STR:
+		switch {
+		case lexer.EndToken == s.Token:
 			if fs.Eof != nil { fs.Eof <- 0 }
 			return
 		default:
-			fs.Out.WriteString(s)
+			fs.Out.WriteString(s.Value)
 		}
 	}
 }
 
-func CreateOutputFileStreamer (in chan(string), file *os.File) (ofs *OutputFileStreamer, eof chan(int)) {
+func CreateOutputFileStreamer (in chan(lexer.TokenValue), file *os.File) (ofs *OutputFileStreamer, eof chan(int)) {
 	eof = make(chan(int))
 	ofs = &OutputFileStreamer{In: in, Out: file, Eof: eof}
 	return
